@@ -1066,6 +1066,7 @@ def append_faces(vertices_seq, faces_seq):
 
 
 def array_to_string(array,
+                    secondary_array=None,
                     col_delim=' ',
                     row_delim='\n',
                     digits=8,
@@ -1113,8 +1114,7 @@ def array_to_string(array,
         raise ValueError(
             'array is  structured, use structured_array_to_string instead')
 
-    # allow a value to be repeated in a value format
-    repeats = value_format.count('{')
+    use_repeats = secondary_array is None
 
     if array.dtype.kind in ['i', 'u']:
         # integer types don't need a specified precision
@@ -1141,8 +1141,12 @@ def array_to_string(array,
 
     # if an array is repeated in the value format
     # do the shaping here so we don't need to specify indexes
-    shaped = np.tile(array.reshape((-1, 1)),
-                     (1, repeats)).reshape(-1)
+    if use_repeats:
+        # allow a value to be repeated in a value format
+        repeats = value_format.count('{')
+        shaped = np.tile(array.reshape((-1, 1)), (1, repeats)).reshape(-1)
+    else:
+        shaped = np.hstack([array.reshape((-1, 1)), secondary_array.reshape((-1, 1))]).reshape(-1)
 
     # run the format operation and remove the extra delimiters
     formatted = format_str.format(*shaped)[:-end_junk]

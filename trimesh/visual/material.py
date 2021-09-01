@@ -57,6 +57,7 @@ class SimpleMaterial(Material):
                  ambient=None,
                  specular=None,
                  glossiness=None,
+                 name=None,
                  **kwargs):
 
         # save image
@@ -69,7 +70,8 @@ class SimpleMaterial(Material):
 
         # save Ns
         self.glossiness = glossiness
-
+        if name is not None:
+            self._name = name
         # save other keyword arguments
         self.kwargs = kwargs
 

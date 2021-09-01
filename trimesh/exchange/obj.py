@@ -323,7 +323,9 @@ def parse_mtl(mtl, resolver=None):
             # newmtl material_0
             if material is not None:
                 # save the old material by old name and remove key
-                materials[material.pop('newmtl')] = material
+                usemtl = material.pop('newmtl')
+                material['name'] = usemtl
+                materials[usemtl] = material
             # start a fresh new material
             material = {'newmtl': ' '.join(split[1:])}
 
@@ -357,7 +359,9 @@ def parse_mtl(mtl, resolver=None):
             material[key] = split[1:]
     # reached EOF so save any existing materials
     if material:
-        materials[material.pop('newmtl')] = material
+        usemtl = material.pop('newmtl')
+        material['name'] = usemtl
+        materials[usemtl] = material
 
     return materials
 
@@ -737,6 +741,23 @@ def _preprocess_faces(text, split_object=False):
     return face_tuples
 
 
+class TexData:
+
+    def __init__(self):
+        self.textures = []
+        self.mtl_key = "material.mtl"
+        self.mtl_texts = {}
+
+    def get_items(self):
+        return self.textures + [(self.mtl_key, ("\n\n".join(v for k, v in self.mtl_texts.items())).encode('utf-8'))]
+
+    def put_items(self, name, items):
+        for k in items:
+            if k == self.mtl_key:
+                self.mtl_texts[name] = items[k].decode('utf-8')
+            else:
+                self.textures.append((k, items[k]))
+
 def export_obj(mesh,
                include_normals=True,
                include_color=True,
@@ -799,7 +820,7 @@ def export_obj(mesh,
 
     counts = {'v': 0, 'vn': 0, 'vt': 0}
 
-    tex_data = None
+    tex_datas = TexData()
 
     for mesh in meshes:
         # we are going to reference face_formats with this
@@ -848,20 +869,24 @@ def export_obj(mesh,
                     material = material.to_simple()
                 (tex_data,
                  tex_name,
-                 mtl_name) = material.to_obj()
-                converted = util.array_to_string(
-                    mesh.visual.uv,
-                    col_delim=' ',
-                    row_delim='\nvt ',
-                    digits=digits)
-                # if vertex texture exists and is the right shape
-                face_type.append('vt')
-                # add the uv coordinates
-                export.append('vt ' + converted)
+                 mtl_name) = material.to_obj(mtl_name='material.mtl')
+
+                if mesh.visual.uv is not None and mesh.visual.uv.shape[0] > 0:
+                    converted = util.array_to_string(
+                        mesh.visual.uv,
+                        col_delim=' ',
+                        row_delim='\nvt ',
+                        digits=digits)
+                    # if vertex texture exists and is the right shape
+                    face_type.append('vt')
+                    # add the uv coordinates
+                    export.append('vt ' + converted)
+
                 # add the reference to the MTL file
                 objects.appendleft('mtllib {}'.format(mtl_name))
                 # add the directive to use the exported material
                 export.appendleft('usemtl {}'.format(tex_name))
+                tex_datas.put_items(tex_name, tex_data)
             except BaseException:
                 log.debug('failed to convert UV coordinates',
                           exc_info=True)
@@ -872,11 +897,14 @@ def export_obj(mesh,
         if hasattr(mesh, 'faces'):
             export.append('f ' + util.array_to_string(
                 mesh.faces + 1 + counts['v'],
+                secondary_array=mesh.faces + 1 + counts['vt'],
                 col_delim=' ',
                 row_delim='\nf ',
                 value_format=face_format))
-        # offset our vertex position
+        # offset our vertex/texture position
         counts['v'] += len(mesh.vertices)
+        if mesh.visual.uv is not None and mesh.visual.uv.shape[0] > 0:
+            counts['vt'] += len(mesh.visual.uv)
 
         # add object name if found in metadata
         if 'name' in mesh.metadata:
@@ -891,13 +919,14 @@ def export_obj(mesh,
     text = '\n'.join(objects)
 
     # if we have a resolver and have asked to write texture
-    if write_texture and resolver is not None and tex_data is not None:
-        # not all resolvers have a write method
-        [resolver.write(k, v) for k, v in tex_data.items()]
+    for k, v in tex_datas.get_items():
+        if write_texture and resolver is not None:
+            # not all resolvers have a write method
+            resolver.write(k, v)
 
     # if we exported texture it changes returned values
     if return_texture:
-        return text, tex_data
+        return text, tex_datas
 
     return text
 
