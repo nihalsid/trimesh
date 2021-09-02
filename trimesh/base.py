@@ -1976,7 +1976,6 @@ class Trimesh(Geometry3D):
 
             # seperate uv coords and vertices
             vertices, visual.uv = vertices[:, :3], vertices[:, 3:]
-
         else:
             # uv coords divided along with vertices
             vertices_faces = remesh.subdivide_to_size(
@@ -1990,6 +1989,9 @@ class Trimesh(Geometry3D):
                 vertices, faces, final_index = vertices_faces
             else:
                 vertices, faces = vertices_faces
+
+        if hasattr(self.visual, 'uv') and np.shape(self.visual.uv) != (len(self.vertices), 2) and hasattr(self.visual, 'material'):
+            visual = self.visual.copy()
 
         # create a new mesh
         result = Trimesh(

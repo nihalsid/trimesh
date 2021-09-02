@@ -895,15 +895,18 @@ def export_obj(mesh,
         face_format = face_formats[tuple(face_type)]
         # add the exported faces to the export if available
         if hasattr(mesh, 'faces'):
+            secondary_array = None
+            if face_format == '{}/{}':
+                secondary_array = mesh.faces + 1 + counts['vt']
             export.append('f ' + util.array_to_string(
                 mesh.faces + 1 + counts['v'],
-                secondary_array=mesh.faces + 1 + counts['vt'],
+                secondary_array=secondary_array,
                 col_delim=' ',
                 row_delim='\nf ',
                 value_format=face_format))
         # offset our vertex/texture position
         counts['v'] += len(mesh.vertices)
-        if mesh.visual.uv is not None and mesh.visual.uv.shape[0] > 0:
+        if hasattr(mesh.visual, 'uv') and mesh.visual.uv is not None and mesh.visual.uv.shape[0] > 0:
             counts['vt'] += len(mesh.visual.uv)
 
         # add object name if found in metadata
