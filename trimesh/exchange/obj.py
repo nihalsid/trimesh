@@ -596,7 +596,7 @@ def _parse_vertices(text):
     vc = None
     if v is not None and v.shape[1] >= 6:
         # vertex colors are stored after vertices
-        v, vc = v[:, :3], v[:, 3:6]
+        v, vc = v[:, :3], v[:, 3:v.shape[1]]
     elif v is not None and v.shape[1] > 3:
         # we got a lot of something unknowable
         v = v[:, :3]
@@ -833,7 +833,7 @@ def export_obj(mesh,
             # create a stacked blob with position and color
             v_blob = np.column_stack((
                 mesh.vertices,
-                to_float(mesh.visual.vertex_colors[:, :3])))
+                to_float(mesh.visual.vertex_colors[:, :])))
         else:
             # otherwise just export vertices
             v_blob = mesh.vertices
