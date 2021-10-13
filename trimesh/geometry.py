@@ -105,12 +105,15 @@ def faces_to_edges(faces, return_index=False):
     faces = np.asanyarray(faces)
 
     # each face has three edges
-    edges = faces[:, [0, 1, 1, 2, 2, 0]].reshape((-1, 2))
+    if faces.shape[1] == 3:
+        edges = faces[:, [0, 1, 1, 2, 2, 0]].reshape((-1, 2))
+    elif faces.shape[1] == 4:
+        edges = faces[:, [0, 1, 1, 2, 2, 3, 3, 0]].reshape((-1, 2))
 
     if return_index:
         # edges are in order of faces due to reshape
         face_index = np.tile(np.arange(len(faces)),
-                             (3, 1)).T.reshape(-1)
+                             (faces.shape[1], 1)).T.reshape(-1)
         return edges, face_index
     return edges
 
