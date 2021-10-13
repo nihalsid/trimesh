@@ -96,6 +96,8 @@ class Trimesh(Geometry3D):
           Assigned to self.visual
         """
 
+        self.do_quad_to_triangles = process
+
         if initial_cache is None:
             initial_cache = {}
 
@@ -306,7 +308,7 @@ class Trimesh(Geometry3D):
             values = np.asanyarray(values, dtype=np.int64)
 
         # automatically triangulate quad faces
-        if len(values.shape) == 2 and values.shape[1] == 4:
+        if len(values.shape) == 2 and values.shape[1] == 4 and self.do_quad_to_triangles:
             log.info('triangulating quad faces')
             values = geometry.triangulate_quads(values)
         self._data['faces'] = values
@@ -807,7 +809,6 @@ class Trimesh(Geometry3D):
         # trigger a change flag which means the MD5 will have to be
         # recomputed. We can escape this check by viewing the array.
         triangles = self.vertices.view(np.ndarray)[self.faces]
-
         return triangles
 
     @caching.cache_decorator

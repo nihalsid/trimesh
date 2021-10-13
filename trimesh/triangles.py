@@ -102,17 +102,31 @@ def angles(triangles):
     triangles = np.asanyarray(triangles, dtype=np.float64)
 
     # get a unit vector for each edge of the triangle
-    u = unitize(triangles[:, 1] - triangles[:, 0])
-    v = unitize(triangles[:, 2] - triangles[:, 0])
-    w = unitize(triangles[:, 2] - triangles[:, 1])
+    if triangles.shape[1] == 3:
+        u = unitize(triangles[:, 1] - triangles[:, 0])
+        v = unitize(triangles[:, 2] - triangles[:, 0])
+        w = unitize(triangles[:, 2] - triangles[:, 1])
+        # run the cosine and per-row dot product
+        result = np.zeros((len(triangles), 3), dtype=np.float64)
+        # clip to make sure we don't float error past 1.0
+        result[:, 0] = np.arccos(np.clip(diagonal_dot(u, v), -1, 1))
+        result[:, 1] = np.arccos(np.clip(diagonal_dot(-u, w), -1, 1))
+        # the third angle is just the remaining
+        result[:, 2] = np.pi - result[:, 0] - result[:, 1]
+    elif triangles.shape[1] == 4:
+        u = unitize(triangles[:, 1] - triangles[:, 0])
+        v = unitize(triangles[:, 3] - triangles[:, 0])
+        w = unitize(triangles[:, 3] - triangles[:, 2])
+        z = unitize(triangles[:, 2] - triangles[:, 1])
+        # run the cosine and per-row dot product
+        result = np.zeros((len(triangles), 4), dtype=np.float64)
+        # clip to make sure we don't float error past 1.0
+        result[:, 0] = np.arccos(np.clip(diagonal_dot(u, v), -1, 1))
+        result[:, 1] = np.arccos(np.clip(diagonal_dot(-u, z), -1, 1))
+        result[:, 2] = np.arccos(np.clip(diagonal_dot(-z, w), -1, 1))
+        # the third angle is just the remaining
+        result[:, 3] = 2 * np.pi - result[:, 0] - result[:, 1] - result[:, 2]
 
-    # run the cosine and per-row dot product
-    result = np.zeros((len(triangles), 3), dtype=np.float64)
-    # clip to make sure we don't float error past 1.0
-    result[:, 0] = np.arccos(np.clip(diagonal_dot(u, v), -1, 1))
-    result[:, 1] = np.arccos(np.clip(diagonal_dot(-u, w), -1, 1))
-    # the third angle is just the remaining
-    result[:, 2] = np.pi - result[:, 0] - result[:, 1]
 
     # a triangle with any zero angles is degenerate
     # so set all of the angles to zero in that case
