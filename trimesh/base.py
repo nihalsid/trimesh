@@ -2521,8 +2521,15 @@ class Trimesh(Geometry3D):
         area_faces : (n, ) float
           Area of each face
         """
-        area_faces = triangles.area(crosses=self.triangles_cross,
-                                    sum=False)
+        if self.faces.shape[1] == 3:
+            area_faces = triangles.area(crosses=self.triangles_cross,
+                                        sum=False)
+        else:  # quad meshes
+            triangles_set_0 = self.triangles[:, [0, 1, 2] , :]
+            triangles_set_1 = self.triangles[:, [0, 2, 3], :]
+            area_0 = triangles.area(triangles=triangles_set_0, crosses=None, sum=False)
+            area_1 = triangles.area(triangles=triangles_set_1, crosses=None, sum=False)
+            area_faces = area_0 + area_1
         return area_faces
 
     @caching.cache_decorator

@@ -9,9 +9,14 @@ import numpy as np
 
 from . import util
 from . import transformations
+from . import triangles
 
 
 def sample_surface(mesh, count, face_weight=None):
+    return sample_surface_core(mesh.triangles, mesh.area_faces, count, face_weight)
+
+
+def sample_surface_core(mesh_triangles, area_faces, count, face_weight=None):
     """
     Sample the surface of a mesh, returning the specified
     number of points
@@ -21,8 +26,8 @@ def sample_surface(mesh, count, face_weight=None):
 
     Parameters
     -----------
-    mesh : trimesh.Trimesh
-      Geometry to sample the surface of
+    mesh_triangles : triangles to sample the surface
+    area_faces : areas of triangles to sample the surface of
     count : int
       Number of points to return
     face_weight : None or len(mesh.faces) float
@@ -40,7 +45,7 @@ def sample_surface(mesh, count, face_weight=None):
     if face_weight is None:
         # len(mesh.faces) float, array of the areas
         # of each face of the mesh
-        face_weight = mesh.area_faces
+        face_weight = area_faces
 
     # cumulative sum of weights (len(mesh.faces))
     weight_cum = np.cumsum(face_weight)
@@ -51,8 +56,8 @@ def sample_surface(mesh, count, face_weight=None):
     face_index = np.searchsorted(weight_cum, face_pick)
 
     # pull triangles into the form of an origin + 2 vectors
-    tri_origins = mesh.triangles[:, 0]
-    tri_vectors = mesh.triangles[:, 1:].copy()
+    tri_origins = mesh_triangles[:, 0]
+    tri_vectors = mesh_triangles[:, 1:].copy()
     tri_vectors -= np.tile(tri_origins, (1, 2)).reshape((-1, 2, 3))
 
     # pull the vectors for the faces we are going to sample from
@@ -163,11 +168,24 @@ def sample_surface_even(mesh, count, radius=None):
 
     # guess radius from area
     if radius is None:
-        radius = np.sqrt(mesh.area / (3 * count))
+        radius = np.sqrt(mesh.area / (mesh.faces.shape[1] * count))
 
     # get points on the surface
-    points, index = sample_surface(mesh, count * 3)
-
+    if mesh.faces.shape[1] == 3:
+        points, index = sample_surface(mesh, count * 3)
+    else:  # quad mesh support
+        triangles_0 = mesh.triangles[:, [0, 1, 2], :]
+        triangles_1 = mesh.triangles[:, [0, 2, 3], :]
+        areas_0 = triangles.area(triangles=triangles_0, crosses=None, sum=False)
+        areas_1 = triangles.area(triangles=triangles_1, crosses=None, sum=False)
+        points_0, index_0 = sample_surface_core(triangles_0, areas_0, count * 2)
+        points_1, index_1 = sample_surface_core(triangles_1, areas_1, count * 2)
+        points = np.concatenate((points_0.reshape(points_0.shape[0], 1, points_0.shape[1]),
+                                 points_1.reshape(points_1.shape[0], 1, points_1.shape[1])
+                                 ), axis=1).reshape(points_0.shape[0] + points_1.shape[0], -1)
+        index = np.concatenate((index_0.reshape(index_0.shape[0], 1),
+                                index_1.reshape(index_1.shape[0], 1)),
+                               axis=1).reshape(index_0.shape[0] + index_1.shape[0])
     # remove the points closer than radius
     points, mask = remove_close(points, radius)
 
