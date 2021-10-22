@@ -216,6 +216,14 @@ class TextureVisuals(Visuals):
         return concatenate(self, others)
 
 
+def naive_merge_textures(faces, faces_tex, num_vertices):
+    flat_faces = faces.flatten()
+    flat_faces_tex = faces_tex.flatten()
+    mask_vt = np.zeros((num_vertices,), dtype=np.uint32)
+    mask_vt[flat_faces] = flat_faces_tex
+    return mask_vt
+
+
 def unmerge_faces(faces, *args, **kwargs):
     """
     Textured meshes can come with faces referencing vertex

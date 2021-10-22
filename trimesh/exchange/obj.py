@@ -13,7 +13,7 @@ except BaseException as E:
 
 from .. import util
 from ..visual.color import to_float
-from ..visual.texture import unmerge_faces, TextureVisuals
+from ..visual.texture import unmerge_faces, TextureVisuals, naive_merge_textures
 from ..visual.material import SimpleMaterial
 
 from ..constants import log, tol
@@ -170,37 +170,49 @@ def load_obj(file_obj,
         # try to get usable texture
         mesh = kwargs.copy()
         if faces_tex is not None:
-            # convert faces referencing vertices and
-            # faces referencing vertex texture to new faces
-            # where each face
-            if faces_norm is not None and len(faces_norm) == len(faces):
-                new_faces, mask_v, mask_vt, mask_vn = unmerge_faces(
-                    faces, faces_tex, faces_norm, maintain_faces=maintain_order)
+            if kwargs['process']:
+                # convert faces referencing vertices and
+                # faces referencing vertex texture to new faces
+                # where each face
+                if faces_norm is not None and len(faces_norm) == len(faces):
+                    new_faces, mask_v, mask_vt, mask_vn = unmerge_faces(
+                        faces, faces_tex, faces_norm, maintain_faces=maintain_order)
+                else:
+                    mask_vn = None
+                    # no face normals but face texturre
+                    new_faces, mask_v, mask_vt = unmerge_faces(
+                        faces, faces_tex, maintain_faces=maintain_order)
+
+                if tol.strict:
+                    # we should NOT have messed up the faces
+                    # note: this is EXTREMELY slow due to all the
+                    # float comparisons so only run this in unit tests
+                    assert np.allclose(v[faces], v[mask_v][new_faces])
+                    # faces should all be in bounds of vertives
+                    assert new_faces.max() < len(v[mask_v])
+                try:
+                    # survive index errors as sometimes we
+                    # want materials without UV coordinates
+                    uv = vt[mask_vt]
+                except BaseException:
+                    log.warning('index failed on UV coordinates, skipping!')
+                    uv = None
+
+                # mask vertices and use new faces
+                mesh.update({'vertices': v[mask_v].copy(),
+                             'faces': new_faces})
             else:
-                mask_vn = None
-                # no face normals but face texturre
-                new_faces, mask_v, mask_vt = unmerge_faces(
-                    faces, faces_tex, maintain_faces=maintain_order)
-
-            if tol.strict:
-                # we should NOT have messed up the faces
-                # note: this is EXTREMELY slow due to all the
-                # float comparisons so only run this in unit tests
-                assert np.allclose(v[faces], v[mask_v][new_faces])
-                # faces should all be in bounds of vertives
-                assert new_faces.max() < len(v[mask_v])
-            try:
-                # survive index errors as sometimes we
-                # want materials without UV coordinates
-                uv = vt[mask_vt]
-            except BaseException:
-                log.warning('index failed on UV coordinates, skipping!')
-                uv = None
-
-            # mask vertices and use new faces
-            mesh.update({'vertices': v[mask_v].copy(),
-                         'faces': new_faces})
-
+                mask_vt = naive_merge_textures(faces, faces_tex, v.shape[0])
+                try:
+                    # survive index errors as sometimes we
+                    # want materials without UV coordinates
+                    uv = vt[mask_vt]
+                except BaseException:
+                    log.warning('index failed on UV coordinates, skipping!')
+                    uv = None
+                # mask vertices and use new faces
+                mesh.update({'vertices': v.copy(),
+                             'faces': faces})
         else:
             # otherwise just use unmasked vertices
             uv = None
@@ -209,7 +221,7 @@ def load_obj(file_obj,
             if tol.strict:
                 assert faces.max() < len(v)
 
-            if vn is not None and np.shape(faces_norm) == faces.shape:
+            if vn is not None and kwargs['process'] and np.shape(faces_norm) == faces.shape:
                 # do the crazy unmerging logic for split indices
                 new_faces, mask_v, mask_vn = unmerge_faces(
                     faces, faces_norm, maintain_faces=maintain_order)
@@ -406,6 +418,26 @@ def _parse_faces_vectorized(array, columns, sample_line):
     # or do something more general
     faces_tex, faces_norm = None, None
     if columns == 6:
+        # if we have two values per vertex the second
+        # one is index of texture coordinate (`vt`)
+        # count how many delimiters are in the first face line
+        # to see if our second value is texture or normals
+        # do splitting to clip off leading/trailing slashes
+        count = ''.join(i.strip('/') for i in sample_line.split()).count('/')
+        if count == columns:
+            # case where each face line looks like:
+            # ' 75//139 76//141 77//141'
+            # which is vertex/nothing/normal
+            faces_norm = array[:, index + 1]
+        elif count == int(columns / 2):
+            # case where each face line looks like:
+            # '75/139 76/141 77/141'
+            # which is vertex/texture
+            faces_tex = array[:, index + 1]
+        else:
+            log.warning('face lines are weird: {}'.format(
+                sample_line))
+    elif columns == 8:
         # if we have two values per vertex the second
         # one is index of texture coordinate (`vt`)
         # count how many delimiters are in the first face line
