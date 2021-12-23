@@ -1209,7 +1209,8 @@ class Trimesh(Geometry3D):
         faces = self._data['faces']
         # if Trimesh has been subclassed and faces have been moved
         # from data to cache, get faces from cache.
-        if not util.is_shape(faces, (-1, 3)):
+
+        if not util.is_shape(faces, (-1, 3)) and not util.is_shape(faces, (-1, 4)):
             faces = self._cache['faces']
 
         # apply to face_attributes
